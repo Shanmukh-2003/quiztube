@@ -51,8 +51,9 @@ async function fetchOEmbed(youtubeId) {
   return { title: res.data.title, thumbnail_url: res.data.thumbnail_url };
 }
 
-// Fetches transcript using YouTube's built-in caption system (no OAuth needed)
-async function fetchTranscript(youtubeId) {
+// Fetches transcript via the youtube-transcript scraper. Works from
+// residential IPs (local dev) but YouTube blocks it from datacenter IPs.
+async function fetchTranscriptViaScraper(youtubeId) {
   try {
     const segments = await YoutubeTranscript.fetchTranscript(youtubeId, { lang: 'en' });
     if (!segments || segments.length === 0) return null;
@@ -61,6 +62,50 @@ async function fetchTranscript(youtubeId) {
   } catch {
     return null;
   }
+}
+
+// Fallback transcript provider for environments where the scraper is
+// blocked (e.g. Vercel). Uses Supadata's residential-proxy API.
+async function fetchTranscriptViaSupadata(youtubeId) {
+  const apiKey = process.env.SUPADATA_API_KEY;
+  if (!apiKey) return null;
+  const headers = { 'x-api-key': apiKey };
+  try {
+    const res = await axios.get('https://api.supadata.ai/v1/transcript', {
+      params: { url: `https://www.youtube.com/watch?v=${youtubeId}`, text: true, mode: 'native', lang: 'en' },
+      headers,
+      timeout: 25000,
+      validateStatus: s => s === 200 || s === 202,
+    });
+
+    let data = res.data;
+    // Larger videos return 202 + a jobId that must be polled.
+    if (res.status === 202 && data?.jobId) {
+      data = null;
+      for (let i = 0; i < 6; i++) {
+        await new Promise(r => setTimeout(r, 2500));
+        const poll = await axios.get(`https://api.supadata.ai/v1/transcript/${res.data.jobId}`, { headers, timeout: 15000 });
+        if (poll.data?.status === 'completed') { data = poll.data; break; }
+        if (poll.data?.status === 'failed') return null;
+      }
+      if (!data) return null;
+    }
+
+    const content = typeof data.content === 'string'
+      ? data.content
+      : Array.isArray(data.content) ? data.content.map(c => c.text).join(' ') : '';
+    const plain = content.replace(/\s+/g, ' ').trim();
+    return plain.length > 100 ? plain : null;
+  } catch {
+    return null;
+  }
+}
+
+// Fetches transcript, falling back to Supadata if the scraper is blocked
+async function fetchTranscript(youtubeId) {
+  const scraped = await fetchTranscriptViaScraper(youtubeId);
+  if (scraped) return scraped;
+  return fetchTranscriptViaSupadata(youtubeId);
 }
 
 // Import all videos from a YouTube playlist
