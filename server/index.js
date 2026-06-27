@@ -16,7 +16,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+const allowedOrigin = process.env.ALLOWED_ORIGIN || 'http://localhost:5173';
+app.use(cors({ origin: allowedOrigin, credentials: true }));
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
@@ -45,4 +46,9 @@ app.get('/api/shared/:token', async (req, res) => {
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 
-app.listen(PORT, () => console.log(`QuizTube server running on port ${PORT}`));
+// export for Vercel serverless; listen only when running locally
+export default app;
+
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => console.log(`QuizTube server running on port ${PORT}`));
+}
