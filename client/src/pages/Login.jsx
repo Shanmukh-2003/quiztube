@@ -23,7 +23,8 @@ export default function Login() {
       login(data.token, data.user);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Something went wrong');
+      const msg = err.response?.data?.error;
+      setError(typeof msg === 'string' ? msg : 'Something went wrong');
     } finally {
       setLoading(false);
     }
