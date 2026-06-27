@@ -1,0 +1,9 @@
+{
+  "name": "watchnotes-pro",
+  "version": "1.0.0",
+  "scripts": {
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "setup:db": "cd server && node -e \"import('./db/index.js').then(m => require('fs').readFileSync('./db/schema.sql','utf8').split(';').filter(s=>s.trim()).reduce((p,s)=>p.then(()=>m.default.query(s)),Promise.resolve())).then(()=>{ console.log('DB schema applied'); process.exit(0); }).catch(e=>{ console.error(e); process.exit(1); })\""
+  }
+}
